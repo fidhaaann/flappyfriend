@@ -7,7 +7,7 @@ const config = {
     default: 'arcade',
     arcade: {
       gravity: { y: 1000 },
-      debug: true // set false when you're happy
+      debug: false // debugging turned off
     }
   },
   scale: {
@@ -25,11 +25,15 @@ let flapSound, deathSound;
 let bgTile, base, ceiling;
 
 const BASE_HEIGHT_RATIO = 0.12;
-const PLAYER_SCALE_RATIO = 0.18;
+const PLAYER_SCALE_RATIO = 0.09;
 const PIPE_WIDTH_RATIO = 0.10;
-const PIPE_GAP_RATIO   = 0.25;
+const PIPE_GAP_RATIO   = 0.35;
 const FLAP_VELOCITY = -350;
 const PIPE_SPEED = -200;
+
+// pipe spacing (horizontal) randomness in ms
+const PIPE_DELAY_MIN = 1100;
+const PIPE_DELAY_MAX = 1800;
 
 function preload() {
   this.load.image('background', 'assets/background.png');
@@ -62,6 +66,7 @@ function create() {
     this.scale.height,
     'background'
   );
+  bgTile.setDepth(0);
 
   // Ground
   const baseHeight = Math.round(this.scale.height * BASE_HEIGHT_RATIO);
@@ -74,6 +79,7 @@ function create() {
   );
   this.physics.add.existing(base, true);
   base.body.setSize(base.displayWidth, base.displayHeight, true);
+  base.setDepth(2);
 
   // Ceiling (invisible)
   const ceilingHeight = 10;
@@ -86,11 +92,12 @@ function create() {
     0
   );
   this.physics.add.existing(ceiling, true);
+  ceiling.setDepth(2);
 
   // Pipes group
   pipes = this.physics.add.group();
 
-  // Player
+  // Player with custom image
   player = this.physics.add.sprite(
     this.scale.width / 4,
     this.scale.height / 2,
@@ -100,17 +107,16 @@ function create() {
   const pScale = (this.scale.height * PLAYER_SCALE_RATIO) / player.height;
   player.setScale(pScale);
   player.setOrigin(0.5, 0.5);
+  player.setVisible(true);
   player.body.setAllowGravity(true);
   player.setCollideWorldBounds(false);
+  player.setDepth(10);
 
-  // Hitbox: centered on the face (image has transparent top)
-  const bodyW = player.displayWidth * 0.45;
-  const bodyH = player.displayHeight * 0.55;
-  player.body.setSize(bodyW, bodyH);
-
-  const offsetX = (player.displayWidth - bodyW) / 2;   // center horizontally
-  const offsetY = player.displayHeight * 0.35;         // push box down onto face
-  player.body.setOffset(offsetX, offsetY);
+  // === COLLISION BOX EXACTLY SAME SIZE AS IMAGE & CENTERED ===
+  const bodyW = player.width;   // width after scaling
+  const bodyH = player.height;  // height after scaling
+  player.body.setSize(bodyW, bodyH, true); // true = center on origin
+  // no manual offset; body is now perfectly centered on sprite
 
   // Initial rotation
   player.angle = 0;
@@ -128,7 +134,7 @@ function create() {
   this.physics.add.collider(player, base, playerHit, null, this);
   this.physics.add.collider(player, ceiling, playerHit, null, this);
 
-  // Score (centered, like Flappy)
+  // Score (centered, always above pipes)
   scoreText = this.add.text(
     this.scale.width / 2,
     this.scale.height * 0.08,
@@ -141,12 +147,22 @@ function create() {
       strokeThickness: 6
     }
   ).setOrigin(0.5);
+  scoreText.setDepth(1000); // ensure on top of everything
 
-  // Pipe spawner
+  // Random pipe spawn scheduling
+  scheduleNextPipe.call(this);
+}
+
+function scheduleNextPipe() {
+  // random delay between min and max
+  const delay = Phaser.Math.Between(PIPE_DELAY_MIN, PIPE_DELAY_MAX);
   pipeTimer = this.time.addEvent({
-    delay: 1500,
-    callback: () => addPipePair.call(this),
-    loop: true
+    delay,
+    callback: () => {
+      addPipePair.call(this);
+      if (!gameOver) scheduleNextPipe.call(this);
+    },
+    loop: false
   });
 }
 
@@ -225,6 +241,7 @@ function addPipePair() {
   topPipe.body.allowGravity = false;
   topPipe.setImmovable(true);
   topPipe.setVelocityX(PIPE_SPEED);
+  topPipe.setDepth(5);
 
   // Bottom pipe (normal, facing up)
   const bottomPipe = pipes.create(spawnX, centerY + gap / 2, 'pipe');
@@ -233,6 +250,7 @@ function addPipePair() {
   bottomPipe.body.allowGravity = false;
   bottomPipe.setImmovable(true);
   bottomPipe.setVelocityX(PIPE_SPEED);
+  bottomPipe.setDepth(5);
 
   pipePairs.push({ top: topPipe, bottom: bottomPipe, passed: false });
 }
@@ -243,8 +261,6 @@ function playerHit() {
 
   player.setTint(0xff0000);
   player.setVelocity(0, 0);
-
-  // Big tilt when dead
   player.angle = 90;
 
   pipes.getChildren().forEach(p => {
@@ -255,6 +271,7 @@ function playerHit() {
   });
 
   if (pipeTimer) pipeTimer.remove(false);
+
   if (flapSound && flapSound.isPlaying) flapSound.stop();
   if (deathSound) deathSound.play();
 
@@ -266,23 +283,28 @@ function playerHit() {
   // Camera shake
   this.cameras.main.shake(150, 0.01);
 
-  // Restart text with fade-in
+  // Restart text with pulsing animation
   const restartText = this.add.text(
     this.scale.width / 2,
     this.scale.height / 2,
     'Tap to Restart',
     {
-      fontSize: Math.round(this.scale.height * 0.05) + 'px',
-      fill: '#fff'
+      fontSize: Math.round(this.scale.height * 0.06) + 'px',
+      fill: '#fffb',
+      stroke: '#000',
+      strokeThickness: 4
     }
   ).setOrigin(0.5);
-  restartText.alpha = 0;
+  restartText.setDepth(1001);
 
   this.tweens.add({
     targets: restartText,
-    alpha: 1,
-    duration: 400,
-    ease: 'Quad.easeIn'
+    scaleX: 1.1,
+    scaleY: 1.1,
+    yoyo: true,
+    repeat: -1,
+    duration: 500,
+    ease: 'Sine.easeInOut'
   });
 
   this.input.once('pointerdown', () => restartScene.call(this), this);
@@ -290,20 +312,16 @@ function playerHit() {
 }
 
 function restartScene() {
-  const scene = this;
+  // stop death sound when restarting
+  if (deathSound && deathSound.isPlaying) deathSound.stop();
 
-  // Fade out then restart
-  this.cameras.main.fade(250, 0, 0, 0);
-
-  this.cameras.main.once('camerafadeoutcomplete', () => {
-    if (pipeTimer) {
-      pipeTimer.remove(false);
-      pipeTimer = null;
-    }
-    if (pipes) pipes.clear(true, true);
-    pipePairs = [];
-    scene.scene.restart();
-  });
+  if (pipeTimer) {
+    pipeTimer.remove(false);
+    pipeTimer = null;
+  }
+  if (pipes) pipes.clear(true, true);
+  pipePairs = [];
+  this.scene.restart();
 }
 
 window.addEventListener('resize', () => {
