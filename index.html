@@ -6,9 +6,22 @@
   <title>Flappy Friend</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
   <style>
-    html, body { height:100%; margin:0; padding:0; background:#000; overflow:hidden; }
-    #game-container { width:100vw; height:100vh; }
-    canvas { display:block; margin:0 auto; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      touch-action: none; /* important for mobile: prevent scroll on tap */
+    }
+    #game-container {
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
   </style>
 </head>
 <body>
