@@ -7,7 +7,7 @@ const config = {
     default: 'arcade',
     arcade: {
       gravity: { y: 1000 },
-      debug: false // debugging turned off
+      debug: true // debugging turned off
     }
   },
   scale: {
@@ -32,8 +32,8 @@ const FLAP_VELOCITY = -350;
 const PIPE_SPEED = -200;
 
 // pipe spacing (horizontal) randomness in ms
-const PIPE_DELAY_MIN = 1100;
-const PIPE_DELAY_MAX = 1800;
+const PIPE_DELAY_MIN = 1300;
+const PIPE_DELAY_MAX = 1900;
 
 function preload() {
   this.load.image('background', 'assets/background.png');
@@ -174,6 +174,11 @@ function update() {
 
   // Tilt logic: slowly fall downwards angle
   player.angle = Phaser.Math.Clamp(player.angle + 2, -30, 90);
+  
+  // Sync collision box rotation with player sprite
+  if (player.body) {
+    player.body.rotation = Phaser.Math.DegToRad(player.angle);
+  }
 
   // Score + cleanup
   for (let i = pipePairs.length - 1; i >= 0; i--) {
@@ -201,6 +206,11 @@ function flap() {
 
   player.setVelocityY(FLAP_VELOCITY);
   player.angle = -25; // tilt up on flap
+  
+  // Sync collision box rotation with player sprite on flap
+  if (player.body) {
+    player.body.rotation = Phaser.Math.DegToRad(player.angle);
+  }
 
   if (flapSound && flapSound.isPlaying) flapSound.stop();
   if (flapSound) flapSound.play();
