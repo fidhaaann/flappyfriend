@@ -7,7 +7,7 @@ const config = {
     default: 'arcade',
     arcade: {
       gravity: { y: 1000 },
-      debug: true // debugging turned off (set true if you want to see hitboxes)
+      debug: true // set true if you want to see hitboxes
     }
   },
   scale: {
@@ -168,8 +168,10 @@ function create() {
   player.setCollideWorldBounds(false);
   player.setDepth(10);
 
-  // IMPORTANT: use displayWidth / displayHeight (scaled size) for hitbox
-  player.body.setSize(player.displayWidth, player.displayHeight, true);
+  // INCREASED COLLISION BOX (20% larger than sprite)
+  const displayW = player.displayWidth;
+  const displayH = player.displayHeight;
+  player.body.setSize(displayW * 1.2, displayH * 1.2, true);
 
   // Initial rotation
   player.angle = 0;
@@ -200,11 +202,11 @@ function create() {
     this.scale.height * 0.08,
     '0',
     {
-      fontSize: Math.round(this.scale.height * 0.08) + 'px',
-      fontFamily: 'Arial',
-      fill: '#fff',
+      fontFamily: "'Press Start 2P'",
+      fontSize: Math.round(this.scale.height * 0.055) + 'px',
+      fill: '#ffffff',
       stroke: '#000',
-      strokeThickness: 6
+      strokeThickness: 8
     }
   ).setOrigin(0.5);
   scoreText.setDepth(1000);
@@ -213,13 +215,13 @@ function create() {
   highScoreText = this.add.text(
     this.scale.width * 0.95,
     this.scale.height * 0.03,
-    `Best: ${highScore}`,
+    `BEST: ${highScore}`,
     {
-      fontSize: Math.round(this.scale.height * 0.04) + 'px',
-      fontFamily: 'Arial',
-      fill: '#ff0',
+      fontFamily: "'Press Start 2P'",
+      fontSize: Math.round(this.scale.height * 0.03) + 'px',
+      fill: '#ffeb3b',
       stroke: '#000',
-      strokeThickness: 4
+      strokeThickness: 6
     }
   ).setOrigin(1, 0);
   highScoreText.setDepth(1000);
@@ -228,12 +230,13 @@ function create() {
   readyText = this.add.text(
     this.scale.width / 2,
     this.scale.height / 2,
-    'Tap to Start',
+    'TAP TO START',
     {
-      fontSize: Math.round(this.scale.height * 0.06) + 'px',
+      fontFamily: "'Press Start 2P'",
+      fontSize: Math.round(this.scale.height * 0.05) + 'px',
       fill: '#fffb',
       stroke: '#000',
-      strokeThickness: 4
+      strokeThickness: 6
     }
   ).setOrigin(0.5);
   readyText.setDepth(1001);
@@ -328,7 +331,7 @@ function update() {
       // Update high score live
       if (score > highScore) {
         highScore = score;
-        highScoreText.setText(`Best: ${highScore}`);
+        highScoreText.setText(`BEST: ${highScore}`);
       }
     }
 
@@ -443,7 +446,7 @@ function playerHit() {
     const stored = parseInt(localStorage.getItem('flappyFriendHighScore') || '0', 10);
     if (isNaN(stored) || score > stored) {
       localStorage.setItem('flappyFriendHighScore', score.toString());
-      highScoreText.setText(`Best: ${score}`);
+      highScoreText.setText(`BEST: ${score}`);
     }
   } catch (e) {
     // ignore if storage not available
@@ -453,12 +456,13 @@ function playerHit() {
   restartText = this.add.text(
     this.scale.width / 2,
     this.scale.height / 2,
-    'Tap to Restart',
+    'TAP TO RESTART',
     {
-      fontSize: Math.round(this.scale.height * 0.06) + 'px',
+      fontFamily: "'Press Start 2P'",
+      fontSize: Math.round(this.scale.height * 0.05) + 'px',
       fill: '#fffb',
       stroke: '#000',
-      strokeThickness: 4
+      strokeThickness: 6
     }
   ).setOrigin(0.5);
   restartText.setDepth(1001);
