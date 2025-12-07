@@ -95,7 +95,7 @@ function getDifficulty() {
 
 // ====== PRELOAD ======
 function preload() {
-  this.load.image('background', 'assets/background.png');
+  this.load.image('background', 'assets/backg.jpg');
   this.load.image('player', 'assets/friend-head.png');
   this.load.image('pipe', 'assets/pipe.png');
   this.load.image('base', 'assets/base.png');
