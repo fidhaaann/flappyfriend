@@ -1,13 +1,20 @@
+// ---- DEVICE DETECTION ----
+const IS_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// Fixed virtual game size (same logical world on all devices)
+const GAME_WIDTH  = 540;
+const GAME_HEIGHT = 960;
+
 const config = {
   type: Phaser.AUTO,
-  width: window.innerWidth,
-  height: window.innerHeight,
+  width: GAME_WIDTH,
+  height: GAME_HEIGHT,
   parent: 'game-container',
   physics: {
     default: 'arcade',
     arcade: {
       gravity: { y: 1000 },
-      debug: true // set true if you want to see hitboxes
+      debug: false // set true if you want to see hitboxes
     }
   },
   scale: {
@@ -27,17 +34,17 @@ let flapSound, deathSound;
 let bgTile, base, ceiling;
 let readyText, restartText;
 
-// Difficulty / layout ratios
-const BASE_HEIGHT_RATIO = 0.12;
-const PLAYER_SCALE_RATIO = 0.09;
-const PIPE_WIDTH_RATIO   = 0.10;
-const PIPE_GAP_RATIO     = 0.35;
-const FLAP_VELOCITY      = -350;
-const PIPE_SPEED         = -200; // base speed
+// Layout & physics ratios (based on virtual size)
+const BASE_HEIGHT_RATIO     = IS_MOBILE ? 0.14 : 0.12;
+const PLAYER_SCALE_RATIO    = 0.09;
+const PIPE_WIDTH_RATIO      = 0.10;
+const PIPE_GAP_RATIO_BASE   = IS_MOBILE ? 0.42 : 0.35;  // slightly bigger gap on mobile
+const FLAP_VELOCITY         = IS_MOBILE ? -420 : -350;  // stronger flap on mobile
+const PIPE_SPEED_BASE       = IS_MOBILE ? -180 : -200;  // a bit slower on mobile
 
 // Pipe spacing (horizontal) randomness in ms
-const PIPE_DELAY_MIN = 1300;
-const PIPE_DELAY_MAX = 1900;
+const PIPE_DELAY_MIN_BASE = 1300;
+const PIPE_DELAY_MAX_BASE = 1900;
 
 // Game states
 const STATE_READY   = 'READY';
@@ -54,21 +61,29 @@ function getDifficulty() {
   const level = Math.min(score, 30); // 0..30
 
   // Pipes get faster (more negative = faster to the left)
-  const pipeSpeed = PIPE_SPEED - level * 5; // up to ~ -350
+  const pipeSpeed = PIPE_SPEED_BASE - level * 5; // up to ~ -330-ish
 
-  // Gap shrinks a bit, but not too crazy
-  const minGapRatio = 0.22;
+  // Gap shrinks a bit with score, but not crazy
+  const minGapRatio = IS_MOBILE ? 0.28 : 0.24;
   const gapRatio = Phaser.Math.Clamp(
-    PIPE_GAP_RATIO - level * 0.005,
+    PIPE_GAP_RATIO_BASE - level * 0.004,
     minGapRatio,
-    PIPE_GAP_RATIO
+    PIPE_GAP_RATIO_BASE
   );
 
   // Delay between pipes gets slightly shorter
-  const minDelay = 800;
+  const minDelay = 850;
   const maxDelayMin = 1200;
-  const delayMin = Phaser.Math.Clamp(PIPE_DELAY_MIN - level * 20, minDelay, PIPE_DELAY_MIN);
-  const delayMax = Phaser.Math.Clamp(PIPE_DELAY_MAX - level * 20, maxDelayMin, PIPE_DELAY_MAX);
+  const delayMin = Phaser.Math.Clamp(
+    PIPE_DELAY_MIN_BASE - level * 15,
+    minDelay,
+    PIPE_DELAY_MIN_BASE
+  );
+  const delayMax = Phaser.Math.Clamp(
+    PIPE_DELAY_MAX_BASE - level * 15,
+    maxDelayMin,
+    PIPE_DELAY_MAX_BASE
+  );
 
   return {
     pipeSpeed,
@@ -115,20 +130,20 @@ function create() {
 
   // Background
   bgTile = this.add.tileSprite(
-    this.scale.width / 2,
-    this.scale.height / 2,
-    this.scale.width,
-    this.scale.height,
+    GAME_WIDTH / 2,
+    GAME_HEIGHT / 2,
+    GAME_WIDTH,
+    GAME_HEIGHT,
     'background'
   );
   bgTile.setDepth(0);
 
   // Ground
-  const baseHeight = Math.round(this.scale.height * BASE_HEIGHT_RATIO);
+  const baseHeight = Math.round(GAME_HEIGHT * BASE_HEIGHT_RATIO);
   base = this.add.tileSprite(
-    this.scale.width / 2,
-    this.scale.height - baseHeight / 2,
-    this.scale.width,
+    GAME_WIDTH / 2,
+    GAME_HEIGHT - baseHeight / 2,
+    GAME_WIDTH,
     baseHeight,
     'base'
   );
@@ -139,9 +154,9 @@ function create() {
   // Ceiling (invisible)
   const ceilingHeight = 10;
   ceiling = this.add.rectangle(
-    this.scale.width / 2,
+    GAME_WIDTH / 2,
     ceilingHeight / 2,
-    this.scale.width,
+    GAME_WIDTH,
     ceilingHeight,
     0x000000,
     0
@@ -154,13 +169,13 @@ function create() {
 
   // Player with custom image
   player = this.physics.add.sprite(
-    this.scale.width / 4,
-    this.scale.height / 2,
+    GAME_WIDTH / 4,
+    GAME_HEIGHT / 2,
     'player'
   );
 
-  // Scale player relative to screen height
-  const pScale = (this.scale.height * PLAYER_SCALE_RATIO) / player.height;
+  // Scale player relative to virtual height
+  const pScale = (GAME_HEIGHT * PLAYER_SCALE_RATIO) / player.height;
   player.setScale(pScale);
   player.setOrigin(0.5, 0.5);
   player.setVisible(true);
@@ -176,7 +191,7 @@ function create() {
   // Initial rotation
   player.angle = 0;
 
-  // Input handler for both READY / PLAYING / OVER
+  // Input handler for READY / PLAYING / OVER
   const handleInput = () => {
     if (gameState === STATE_READY) {
       startGame.call(this);
@@ -198,12 +213,12 @@ function create() {
 
   // Score UI (centered)
   scoreText = this.add.text(
-    this.scale.width / 2,
-    this.scale.height * 0.08,
+    GAME_WIDTH / 2,
+    GAME_HEIGHT * 0.08,
     '0',
     {
       fontFamily: "'Press Start 2P'",
-      fontSize: Math.round(this.scale.height * 0.055) + 'px',
+      fontSize: Math.round(GAME_HEIGHT * 0.055) + 'px',
       fill: '#ffffff',
       stroke: '#000',
       strokeThickness: 8
@@ -213,12 +228,12 @@ function create() {
 
   // High score UI (top-right)
   highScoreText = this.add.text(
-    this.scale.width * 0.95,
-    this.scale.height * 0.03,
+    GAME_WIDTH * 0.95,
+    GAME_HEIGHT * 0.03,
     `BEST: ${highScore}`,
     {
       fontFamily: "'Press Start 2P'",
-      fontSize: Math.round(this.scale.height * 0.03) + 'px',
+      fontSize: Math.round(GAME_HEIGHT * 0.03) + 'px',
       fill: '#ffeb3b',
       stroke: '#000',
       strokeThickness: 6
@@ -228,12 +243,12 @@ function create() {
 
   // Ready text
   readyText = this.add.text(
-    this.scale.width / 2,
-    this.scale.height / 2,
+    GAME_WIDTH / 2,
+    GAME_HEIGHT / 2,
     'TAP TO START',
     {
       fontFamily: "'Press Start 2P'",
-      fontSize: Math.round(this.scale.height * 0.05) + 'px',
+      fontSize: Math.round(GAME_HEIGHT * 0.05) + 'px',
       fill: '#fffb',
       stroke: '#000',
       strokeThickness: 6
@@ -251,8 +266,6 @@ function create() {
     duration: 600,
     ease: 'Sine.easeInOut'
   });
-
-  // NOTE: we do NOT spawn pipes yet; that happens when the player starts the game.
 }
 
 // ====== START GAME ======
@@ -299,12 +312,11 @@ function update() {
     const bobAmplitude = 10;
     const bobSpeed = 0.003; // ms
     const t = this.time.now;
-    player.y = this.scale.height / 2 + Math.sin(t * bobSpeed) * bobAmplitude;
+    player.y = GAME_HEIGHT / 2 + Math.sin(t * bobSpeed) * bobAmplitude;
     return;
   }
 
   if (gameState === STATE_OVER) {
-    // After death, no more background scrolling or pipe movement changes
     return;
   }
 
@@ -314,7 +326,6 @@ function update() {
 
   // Tilt logic: slowly fall downwards angle
   player.angle = Phaser.Math.Clamp(player.angle + 2, -30, 90);
-  // We DON'T rotate the physics body; Arcade uses AABB anyway.
 
   // Score + cleanup
   for (let i = pipePairs.length - 1; i >= 0; i--) {
@@ -359,17 +370,18 @@ function flap() {
   }
 }
 
-// ====== CREATE PIPE PAIR ======
+// ====== CREATE PIPE PAIR (ALIGNED) ======
 function addPipePair() {
   if (gameState !== STATE_PLAYING) return;
 
-  const w = this.scale.width;
-  const h = this.scale.height;
+  const w = GAME_WIDTH;
+  const h = GAME_HEIGHT;
   const baseHeight = Math.round(h * BASE_HEIGHT_RATIO);
 
   const { gapRatio, pipeSpeed } = getDifficulty();
   const gap = Math.round(h * gapRatio);
 
+  // Center of the gap
   const minCenter = gap / 2 + 50;
   const maxCenter = h - baseHeight - gap / 2 - 50;
   const centerY = Phaser.Math.Between(
@@ -377,27 +389,39 @@ function addPipePair() {
     Math.max(minCenter + 1, maxCenter)
   );
 
-  const pipeTexture = this.textures.get('pipe').getSourceImage();
-  const pipeTexWidth = pipeTexture.width;
+  // Desired pixel width of the pipes
+  const pipePixelWidth = w * PIPE_WIDTH_RATIO;
 
-  const pipeScale = (w * PIPE_WIDTH_RATIO) / pipeTexWidth;
-  const pipeWidth = pipeTexWidth * pipeScale;
-  const spawnX = Math.round(w + pipeWidth / 2 + 30);
+  // ---- TOP PIPE ----
+  // height from top of screen down to top of gap
+  const topHeight = centerY - gap / 2;
 
-  // Top pipe (flipped, facing down)
-  const topPipe = pipes.create(spawnX, centerY - gap / 2, 'pipe');
-  topPipe.setOrigin(0.5, 1);
-  topPipe.setScale(pipeScale);
-  topPipe.setFlipY(true);
+  const topPipe = pipes.create(
+    w + pipePixelWidth / 2 + 30,
+    topHeight, // bottom of the top pipe
+    'pipe'
+  );
+  topPipe.setOrigin(0.5, 1); // bottom anchored
+  topPipe.setFlipY(true);    // open end faces downward
+  topPipe.displayWidth = pipePixelWidth;
+  topPipe.displayHeight = topHeight; // stretches so top is at y≈0
   topPipe.body.allowGravity = false;
   topPipe.setImmovable(true);
   topPipe.setVelocityX(pipeSpeed);
   topPipe.setDepth(5);
 
-  // Bottom pipe (normal, facing up)
-  const bottomPipe = pipes.create(spawnX, centerY + gap / 2, 'pipe');
-  bottomPipe.setOrigin(0.5, 0);
-  bottomPipe.setScale(pipeScale);
+  // ---- BOTTOM PIPE ----
+  // height from top of gap down to ground (above base)
+  const bottomHeight = (h - baseHeight) - (centerY + gap / 2);
+
+  const bottomPipe = pipes.create(
+    w + pipePixelWidth / 2 + 30,
+    centerY + gap / 2, // top of bottom pipe
+    'pipe'
+  );
+  bottomPipe.setOrigin(0.5, 0); // top anchored
+  bottomPipe.displayWidth = pipePixelWidth;
+  bottomPipe.displayHeight = bottomHeight; // stretches to ground
   bottomPipe.body.allowGravity = false;
   bottomPipe.setImmovable(true);
   bottomPipe.setVelocityX(pipeSpeed);
@@ -454,12 +478,12 @@ function playerHit() {
 
   // Restart text with pulsing animation
   restartText = this.add.text(
-    this.scale.width / 2,
-    this.scale.height / 2,
+    GAME_WIDTH / 2,
+    GAME_HEIGHT / 2,
     'TAP TO RESTART',
     {
       fontFamily: "'Press Start 2P'",
-      fontSize: Math.round(this.scale.height * 0.05) + 'px',
+      fontSize: Math.round(GAME_HEIGHT * 0.05) + 'px',
       fill: '#fffb',
       stroke: '#000',
       strokeThickness: 6
@@ -492,14 +516,4 @@ function restartScene() {
   this.scene.restart();
 }
 
-// ====== HANDLE RESIZE ======
-window.addEventListener('resize', () => {
-  config.width = window.innerWidth;
-  config.height = window.innerHeight;
-  if (game && game.scale) game.scale.resize(config.width, config.height);
-  if (game && game.scene && game.scene.scenes) {
-    game.scene.scenes.forEach(s => {
-      if (s && s.scene) s.scene.restart();
-    });
-  }
-});
+// Phaser Scale.FIT handles resize; no manual resize listener needed.
