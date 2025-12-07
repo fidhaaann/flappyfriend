@@ -7,7 +7,7 @@ const config = {
     default: 'arcade',
     arcade: {
       gravity: { y: 1000 },
-      debug: true // debugging turned off
+      debug: true // debugging turned off (set true if you want to see hitboxes)
     }
   },
   scale: {
@@ -19,22 +19,66 @@ const config = {
 
 const game = new Phaser.Game(config);
 
+// Game objects
 let player, pipes, pipePairs = [], pipeTimer;
-let score = 0, scoreText, gameOver = false;
+let score = 0, scoreText, highScoreText;
+let gameOver = false;
 let flapSound, deathSound;
 let bgTile, base, ceiling;
+let readyText, restartText;
 
+// Difficulty / layout ratios
 const BASE_HEIGHT_RATIO = 0.12;
 const PLAYER_SCALE_RATIO = 0.09;
-const PIPE_WIDTH_RATIO = 0.10;
-const PIPE_GAP_RATIO   = 0.35;
-const FLAP_VELOCITY = -350;
-const PIPE_SPEED = -200;
+const PIPE_WIDTH_RATIO   = 0.10;
+const PIPE_GAP_RATIO     = 0.35;
+const FLAP_VELOCITY      = -350;
+const PIPE_SPEED         = -200; // base speed
 
-// pipe spacing (horizontal) randomness in ms
+// Pipe spacing (horizontal) randomness in ms
 const PIPE_DELAY_MIN = 1300;
 const PIPE_DELAY_MAX = 1900;
 
+// Game states
+const STATE_READY   = 'READY';
+const STATE_PLAYING = 'PLAYING';
+const STATE_OVER    = 'OVER';
+let gameState = STATE_READY;
+
+// High score
+let highScore = 0;
+
+// ====== HELPERS: DIFFICULTY ======
+function getDifficulty() {
+  // Difficulty based on score. Caps to avoid becoming impossible.
+  const level = Math.min(score, 30); // 0..30
+
+  // Pipes get faster (more negative = faster to the left)
+  const pipeSpeed = PIPE_SPEED - level * 5; // up to ~ -350
+
+  // Gap shrinks a bit, but not too crazy
+  const minGapRatio = 0.22;
+  const gapRatio = Phaser.Math.Clamp(
+    PIPE_GAP_RATIO - level * 0.005,
+    minGapRatio,
+    PIPE_GAP_RATIO
+  );
+
+  // Delay between pipes gets slightly shorter
+  const minDelay = 800;
+  const maxDelayMin = 1200;
+  const delayMin = Phaser.Math.Clamp(PIPE_DELAY_MIN - level * 20, minDelay, PIPE_DELAY_MIN);
+  const delayMax = Phaser.Math.Clamp(PIPE_DELAY_MAX - level * 20, maxDelayMin, PIPE_DELAY_MAX);
+
+  return {
+    pipeSpeed,
+    gapRatio,
+    delayMin,
+    delayMax
+  };
+}
+
+// ====== PRELOAD ======
 function preload() {
   this.load.image('background', 'assets/background.png');
   this.load.image('player', 'assets/friend-head.png');
@@ -45,14 +89,25 @@ function preload() {
   this.load.audio('death', 'assets/death.mp3');
 }
 
+// ====== CREATE ======
 function create() {
+  // Reset base state
   score = 0;
   gameOver = false;
+  gameState = STATE_READY;
   pipePairs = [];
 
   if (pipeTimer) {
     pipeTimer.remove(false);
     pipeTimer = null;
+  }
+
+  // Load / init high score
+  try {
+    highScore = parseInt(localStorage.getItem('flappyFriendHighScore') || '0', 10);
+    if (isNaN(highScore)) highScore = 0;
+  } catch (e) {
+    highScore = 0;
   }
 
   flapSound = this.sound.add('flap');
@@ -104,37 +159,42 @@ function create() {
     'player'
   );
 
+  // Scale player relative to screen height
   const pScale = (this.scale.height * PLAYER_SCALE_RATIO) / player.height;
   player.setScale(pScale);
   player.setOrigin(0.5, 0.5);
   player.setVisible(true);
-  player.body.setAllowGravity(true);
+  player.body.setAllowGravity(false); // no gravity until game starts
   player.setCollideWorldBounds(false);
   player.setDepth(10);
 
-  // === COLLISION BOX EXACTLY SAME SIZE AS IMAGE & CENTERED ===
-  const bodyW = player.width;   // width after scaling
-  const bodyH = player.height;  // height after scaling
-  player.body.setSize(bodyW, bodyH, true); // true = center on origin
-  // no manual offset; body is now perfectly centered on sprite
+  // IMPORTANT: use displayWidth / displayHeight (scaled size) for hitbox
+  player.body.setSize(player.displayWidth, player.displayHeight, true);
 
   // Initial rotation
   player.angle = 0;
 
-  // Input (tap / click / space)
-  this.input.on('pointerdown', () =>
-    gameOver ? restartScene.call(this) : flap()
-  );
-  this.input.keyboard.on('keydown-SPACE', () =>
-    gameOver ? restartScene.call(this) : flap()
-  );
+  // Input handler for both READY / PLAYING / OVER
+  const handleInput = () => {
+    if (gameState === STATE_READY) {
+      startGame.call(this);
+      flap();
+    } else if (gameState === STATE_PLAYING) {
+      flap();
+    } else if (gameState === STATE_OVER) {
+      restartScene.call(this);
+    }
+  };
+
+  this.input.on('pointerdown', handleInput, this);
+  this.input.keyboard.on('keydown-SPACE', handleInput, this);
 
   // Collisions
   this.physics.add.collider(player, pipes, playerHit, null, this);
   this.physics.add.collider(player, base, playerHit, null, this);
   this.physics.add.collider(player, ceiling, playerHit, null, this);
 
-  // Score (centered, always above pipes)
+  // Score UI (centered)
   scoreText = this.add.text(
     this.scale.width / 2,
     this.scale.height * 0.08,
@@ -147,38 +207,111 @@ function create() {
       strokeThickness: 6
     }
   ).setOrigin(0.5);
-  scoreText.setDepth(1000); // ensure on top of everything
+  scoreText.setDepth(1000);
 
-  // Random pipe spawn scheduling
+  // High score UI (top-right)
+  highScoreText = this.add.text(
+    this.scale.width * 0.95,
+    this.scale.height * 0.03,
+    `Best: ${highScore}`,
+    {
+      fontSize: Math.round(this.scale.height * 0.04) + 'px',
+      fontFamily: 'Arial',
+      fill: '#ff0',
+      stroke: '#000',
+      strokeThickness: 4
+    }
+  ).setOrigin(1, 0);
+  highScoreText.setDepth(1000);
+
+  // Ready text
+  readyText = this.add.text(
+    this.scale.width / 2,
+    this.scale.height / 2,
+    'Tap to Start',
+    {
+      fontSize: Math.round(this.scale.height * 0.06) + 'px',
+      fill: '#fffb',
+      stroke: '#000',
+      strokeThickness: 4
+    }
+  ).setOrigin(0.5);
+  readyText.setDepth(1001);
+
+  // Gentle pulse effect for ready text
+  this.tweens.add({
+    targets: readyText,
+    scaleX: 1.05,
+    scaleY: 1.05,
+    yoyo: true,
+    repeat: -1,
+    duration: 600,
+    ease: 'Sine.easeInOut'
+  });
+
+  // NOTE: we do NOT spawn pipes yet; that happens when the player starts the game.
+}
+
+// ====== START GAME ======
+function startGame() {
+  if (gameState !== STATE_READY) return;
+
+  gameState = STATE_PLAYING;
+  gameOver = false;
+
+  // Enable gravity and remove ready text
+  player.body.setAllowGravity(true);
+  if (readyText) {
+    readyText.destroy();
+    readyText = null;
+  }
+
+  // Spawn first pipes
   scheduleNextPipe.call(this);
 }
 
+// ====== PIPE SPAWNING ======
 function scheduleNextPipe() {
-  // random delay between min and max
-  const delay = Phaser.Math.Between(PIPE_DELAY_MIN, PIPE_DELAY_MAX);
+  if (gameState !== STATE_PLAYING) return;
+
+  const { delayMin, delayMax } = getDifficulty();
+  const delay = Phaser.Math.Between(delayMin, delayMax);
+
   pipeTimer = this.time.addEvent({
     delay,
     callback: () => {
-      addPipePair.call(this);
-      if (!gameOver) scheduleNextPipe.call(this);
+      if (gameState === STATE_PLAYING) {
+        addPipePair.call(this);
+        scheduleNextPipe.call(this);
+      }
     },
     loop: false
   });
 }
 
+// ====== UPDATE LOOP ======
 function update() {
-  if (gameOver) return;
+  if (gameState === STATE_READY) {
+    // Tiny idle bobbing for the player while waiting
+    const bobAmplitude = 10;
+    const bobSpeed = 0.003; // ms
+    const t = this.time.now;
+    player.y = this.scale.height / 2 + Math.sin(t * bobSpeed) * bobAmplitude;
+    return;
+  }
 
+  if (gameState === STATE_OVER) {
+    // After death, no more background scrolling or pipe movement changes
+    return;
+  }
+
+  // PLAYING
   bgTile.tilePositionX += 2;
   base.tilePositionX += 2;
 
   // Tilt logic: slowly fall downwards angle
   player.angle = Phaser.Math.Clamp(player.angle + 2, -30, 90);
-  
-  // Sync collision box rotation with player sprite
-  if (player.body) {
-    player.body.rotation = Phaser.Math.DegToRad(player.angle);
-  }
+  // We DON'T rotate the physics body; Arcade uses AABB anyway.
 
   // Score + cleanup
   for (let i = pipePairs.length - 1; i >= 0; i--) {
@@ -191,6 +324,12 @@ function update() {
       pair.passed = true;
       score++;
       scoreText.setText(score.toString());
+
+      // Update high score live
+      if (score > highScore) {
+        highScore = score;
+        highScoreText.setText(`Best: ${highScore}`);
+      }
     }
 
     if (rightEdge < -200) {
@@ -201,16 +340,12 @@ function update() {
   }
 }
 
+// ====== FLAP ======
 function flap() {
-  if (gameOver) return;
+  if (gameState !== STATE_PLAYING) return;
 
   player.setVelocityY(FLAP_VELOCITY);
   player.angle = -25; // tilt up on flap
-  
-  // Sync collision box rotation with player sprite on flap
-  if (player.body) {
-    player.body.rotation = Phaser.Math.DegToRad(player.angle);
-  }
 
   if (flapSound && flapSound.isPlaying) flapSound.stop();
   if (flapSound) flapSound.play();
@@ -221,13 +356,16 @@ function flap() {
   }
 }
 
+// ====== CREATE PIPE PAIR ======
 function addPipePair() {
-  if (gameOver) return;
+  if (gameState !== STATE_PLAYING) return;
 
   const w = this.scale.width;
   const h = this.scale.height;
-  const gap = Math.round(h * PIPE_GAP_RATIO);
   const baseHeight = Math.round(h * BASE_HEIGHT_RATIO);
+
+  const { gapRatio, pipeSpeed } = getDifficulty();
+  const gap = Math.round(h * gapRatio);
 
   const minCenter = gap / 2 + 50;
   const maxCenter = h - baseHeight - gap / 2 - 50;
@@ -250,7 +388,7 @@ function addPipePair() {
   topPipe.setFlipY(true);
   topPipe.body.allowGravity = false;
   topPipe.setImmovable(true);
-  topPipe.setVelocityX(PIPE_SPEED);
+  topPipe.setVelocityX(pipeSpeed);
   topPipe.setDepth(5);
 
   // Bottom pipe (normal, facing up)
@@ -259,20 +397,24 @@ function addPipePair() {
   bottomPipe.setScale(pipeScale);
   bottomPipe.body.allowGravity = false;
   bottomPipe.setImmovable(true);
-  bottomPipe.setVelocityX(PIPE_SPEED);
+  bottomPipe.setVelocityX(pipeSpeed);
   bottomPipe.setDepth(5);
 
   pipePairs.push({ top: topPipe, bottom: bottomPipe, passed: false });
 }
 
+// ====== COLLISION HANDLER ======
 function playerHit() {
-  if (gameOver) return;
+  if (gameState === STATE_OVER) return;
+
+  gameState = STATE_OVER;
   gameOver = true;
 
   player.setTint(0xff0000);
   player.setVelocity(0, 0);
   player.angle = 90;
 
+  // Stop pipes
   pipes.getChildren().forEach(p => {
     if (p && p.body) {
       p.setVelocityX(0);
@@ -280,7 +422,10 @@ function playerHit() {
     }
   });
 
-  if (pipeTimer) pipeTimer.remove(false);
+  if (pipeTimer) {
+    pipeTimer.remove(false);
+    pipeTimer = null;
+  }
 
   if (flapSound && flapSound.isPlaying) flapSound.stop();
   if (deathSound) deathSound.play();
@@ -293,8 +438,19 @@ function playerHit() {
   // Camera shake
   this.cameras.main.shake(150, 0.01);
 
+  // Save high score
+  try {
+    const stored = parseInt(localStorage.getItem('flappyFriendHighScore') || '0', 10);
+    if (isNaN(stored) || score > stored) {
+      localStorage.setItem('flappyFriendHighScore', score.toString());
+      highScoreText.setText(`Best: ${score}`);
+    }
+  } catch (e) {
+    // ignore if storage not available
+  }
+
   // Restart text with pulsing animation
-  const restartText = this.add.text(
+  restartText = this.add.text(
     this.scale.width / 2,
     this.scale.height / 2,
     'Tap to Restart',
@@ -316,13 +472,10 @@ function playerHit() {
     duration: 500,
     ease: 'Sine.easeInOut'
   });
-
-  this.input.once('pointerdown', () => restartScene.call(this), this);
-  this.input.keyboard.once('keydown-SPACE', () => restartScene.call(this), this);
 }
 
+// ====== RESTART SCENE ======
 function restartScene() {
-  // stop death sound when restarting
   if (deathSound && deathSound.isPlaying) deathSound.stop();
 
   if (pipeTimer) {
@@ -331,14 +484,18 @@ function restartScene() {
   }
   if (pipes) pipes.clear(true, true);
   pipePairs = [];
+
   this.scene.restart();
 }
 
+// ====== HANDLE RESIZE ======
 window.addEventListener('resize', () => {
   config.width = window.innerWidth;
   config.height = window.innerHeight;
   if (game && game.scale) game.scale.resize(config.width, config.height);
-  game.scene.scenes.forEach(s => {
-    if (s && s.scene) s.scene.restart();
-  });
+  if (game && game.scene && game.scene.scenes) {
+    game.scene.scenes.forEach(s => {
+      if (s && s.scene) s.scene.restart();
+    });
+  }
 });
