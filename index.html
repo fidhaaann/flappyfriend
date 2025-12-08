@@ -4,37 +4,151 @@
   <meta charset="utf-8" />
   <meta
     name="viewport"
-    content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
   />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <title>Flappy Friend</title>
+  <title>Flappy Friend - Enhanced</title>
 
   <!-- Phaser -->
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 
   <style>
-    html, body {
-      height: 100%;
+    * {
       margin: 0;
       padding: 0;
-      background: #000;
-      overflow: hidden;
-      touch-action: none; /* prevent scroll on tap on mobile */
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-                   Roboto, Helvetica, Arial, sans-serif;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
     }
+    
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      touch-action: manipulation;
+    }
+    
     #game-container {
       width: 100vw;
       height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
     }
+    
     canvas {
       display: block;
-      margin: 0 auto;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    
+    /* Loading screen */
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      color: white;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #4dffea;
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 20px;
+    }
+    
+    .loading-text {
+      font-size: 18px;
+      color: #4dffea;
+      letter-spacing: 2px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Hide loading when game starts */
+    .loading.hidden {
+      display: none;
+    }
+    
+    /* Game info */
+    .game-info {
+      position: fixed;
+      bottom: 20px;
+      width: 100%;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 12px;
+      padding: 0 20px;
+      z-index: 100;
+    }
+    
+    /* Mute button */
+    .mute-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 40px;
+      height: 40px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid white;
+      border-radius: 50%;
+      color: white;
+      font-size: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      z-index: 1000;
+      backdrop-filter: blur(5px);
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 360px) {
+      .loading-text {
+        font-size: 16px;
+      }
+      .game-info {
+        font-size: 10px;
+        bottom: 10px;
+      }
+    }
+    
+    @media (min-width: 768px) {
+      .mute-btn {
+        top: 30px;
+        right: 30px;
+        width: 50px;
+        height: 50px;
+        font-size: 24px;
+      }
     }
   </style>
 </head>
 <body>
-  <div id="game-container"></div>
-  <script src="game.js"></script>
-</body>
-</html>
+  <!-- Loading screen -->
+  <div class="loading" id="loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">LOADING FLAPPY FRIEND...</div>
+  </div>
+  
+  <!-- Game container -->
+  <div id="game-container
