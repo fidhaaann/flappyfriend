@@ -31,7 +31,7 @@ let player, pipes, pipePairs = [], pipeTimer;
 let score = 0, scoreText, highScoreText;
 let gameOver = false;
 let flapSound, deathSound;
-let bgTile, base, ceiling;
+let bgImage, base, ceiling;
 let readyText, restartText;
 
 // Layout & physics ratios (based on virtual size)
@@ -57,13 +57,10 @@ let highScore = 0;
 
 // ====== HELPERS: DIFFICULTY ======
 function getDifficulty() {
-  // Difficulty based on score. Caps to avoid becoming impossible.
   const level = Math.min(score, 30); // 0..30
 
-  // Pipes get faster (more negative = faster to the left)
-  const pipeSpeed = PIPE_SPEED_BASE - level * 5; // up to ~ -330-ish
+  const pipeSpeed = PIPE_SPEED_BASE - level * 5;
 
-  // Gap shrinks a bit with score, but not crazy
   const minGapRatio = IS_MOBILE ? 0.28 : 0.24;
   const gapRatio = Phaser.Math.Clamp(
     PIPE_GAP_RATIO_BASE - level * 0.004,
@@ -71,7 +68,6 @@ function getDifficulty() {
     PIPE_GAP_RATIO_BASE
   );
 
-  // Delay between pipes gets slightly shorter
   const minDelay = 850;
   const maxDelayMin = 1200;
   const delayMin = Phaser.Math.Clamp(
@@ -95,7 +91,7 @@ function getDifficulty() {
 
 // ====== PRELOAD ======
 function preload() {
-  this.load.image('background', 'assets/backg2.jpg');
+  this.load.image('background', 'assets/moon.jpg');
   this.load.image('player', 'assets/friend-head.png');
   this.load.image('pipe', 'assets/pipe.png');
   this.load.image('base', 'assets/base.png');
@@ -106,7 +102,6 @@ function preload() {
 
 // ====== CREATE ======
 function create() {
-  // Reset base state
   score = 0;
   gameOver = false;
   gameState = STATE_READY;
@@ -128,15 +123,15 @@ function create() {
   flapSound = this.sound.add('flap');
   deathSound = this.sound.add('death');
 
-  // Background
-  bgTile = this.add.tileSprite(
+  // === STATIC BACKGROUND ===
+  bgImage = this.add.image(
     GAME_WIDTH / 2,
     GAME_HEIGHT / 2,
-    GAME_WIDTH,
-    GAME_HEIGHT,
     'background'
   );
-  bgTile.setDepth(0);
+  bgImage.displayWidth  = GAME_WIDTH;
+  bgImage.displayHeight = GAME_HEIGHT;
+  bgImage.setDepth(0);
 
   // Ground
   const baseHeight = Math.round(GAME_HEIGHT * BASE_HEIGHT_RATIO);
@@ -174,7 +169,6 @@ function create() {
     'player'
   );
 
-  // Scale player relative to virtual height
   const pScale = (GAME_HEIGHT * PLAYER_SCALE_RATIO) / player.height;
   player.setScale(pScale);
   player.setOrigin(0.5, 0.5);
@@ -188,7 +182,6 @@ function create() {
   const displayH = player.displayHeight;
   player.body.setSize(displayW * 1.2, displayH * 1.2, true);
 
-  // Initial rotation
   player.angle = 0;
 
   // Input handler for READY / PLAYING / OVER
@@ -211,52 +204,53 @@ function create() {
   this.physics.add.collider(player, base, playerHit, null, this);
   this.physics.add.collider(player, ceiling, playerHit, null, this);
 
-  // Score UI (centered)
+  // === UI TEXT (aligned & sized for phones) ===
+
+  // Score in top-centre
   scoreText = this.add.text(
     GAME_WIDTH / 2,
-    GAME_HEIGHT * 0.08,
+    GAME_HEIGHT * 0.06,
     '0',
     {
-      fontFamily: "'Press Start 2P'",
-      fontSize: Math.round(GAME_HEIGHT * 0.055) + 'px',
-      fill: '#ffffff',
-      stroke: '#000',
-      strokeThickness: 8
-    }
-  ).setOrigin(0.5);
-  scoreText.setDepth(1000);
-
-  // High score UI (top-right)
-  highScoreText = this.add.text(
-    GAME_WIDTH * 0.95,
-    GAME_HEIGHT * 0.03,
-    `BEST: ${highScore}`,
-    {
-      fontFamily: "'Press Start 2P'",
-      fontSize: Math.round(GAME_HEIGHT * 0.03) + 'px',
-      fill: '#ffeb3b',
-      stroke: '#000',
+      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: Math.round(GAME_HEIGHT * 0.05) + 'px',
+      color: '#ffffff',
+      stroke: '#000000',
       strokeThickness: 6
     }
-  ).setOrigin(1, 0);
+  ).setOrigin(0.5, 0.5);
+  scoreText.setDepth(1000);
+
+  // High score in top-left, smaller
+  highScoreText = this.add.text(
+    GAME_WIDTH * 0.03,
+    GAME_HEIGHT * 0.02,
+    `BEST: ${highScore}`,
+    {
+      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: Math.round(GAME_HEIGHT * 0.03) + 'px',
+      color: '#ffeb3b',
+      stroke: '#000000',
+      strokeThickness: 5
+    }
+  ).setOrigin(0, 0); // left-top
   highScoreText.setDepth(1000);
 
-  // Ready text
+  // Ready text in middle
   readyText = this.add.text(
     GAME_WIDTH / 2,
-    GAME_HEIGHT / 2,
+    GAME_HEIGHT * 0.5,
     'TAP TO START',
     {
-      fontFamily: "'Press Start 2P'",
-      fontSize: Math.round(GAME_HEIGHT * 0.05) + 'px',
-      fill: '#fffb',
-      stroke: '#000',
+      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: Math.round(GAME_HEIGHT * 0.045) + 'px',
+      color: '#ffffff',
+      stroke: '#000000',
       strokeThickness: 6
     }
   ).setOrigin(0.5);
   readyText.setDepth(1001);
 
-  // Gentle pulse effect for ready text
   this.tweens.add({
     targets: readyText,
     scaleX: 1.05,
@@ -275,14 +269,12 @@ function startGame() {
   gameState = STATE_PLAYING;
   gameOver = false;
 
-  // Enable gravity and remove ready text
   player.body.setAllowGravity(true);
   if (readyText) {
     readyText.destroy();
     readyText = null;
   }
 
-  // Spawn first pipes
   scheduleNextPipe.call(this);
 }
 
@@ -308,23 +300,21 @@ function scheduleNextPipe() {
 // ====== UPDATE LOOP ======
 function update() {
   if (gameState === STATE_READY) {
-    // Tiny idle bobbing for the player while waiting
     const bobAmplitude = 10;
-    const bobSpeed = 0.003; // ms
+    const bobSpeed = 0.003;
     const t = this.time.now;
     player.y = GAME_HEIGHT / 2 + Math.sin(t * bobSpeed) * bobAmplitude;
     return;
   }
 
-  if (gameState === STATE_OVER) {
-    return;
-  }
+  if (gameState === STATE_OVER) return;
 
   // PLAYING
-  bgTile.tilePositionX += 2;
+
+  // Background is static. Only ground moves:
   base.tilePositionX += 2;
 
-  // Tilt logic: slowly fall downwards angle
+  // Tilt logic
   player.angle = Phaser.Math.Clamp(player.angle + 2, -30, 90);
 
   // Score + cleanup
@@ -339,11 +329,13 @@ function update() {
       score++;
       scoreText.setText(score.toString());
 
-      // Update high score live
       if (score > highScore) {
         highScore = score;
         highScoreText.setText(`BEST: ${highScore}`);
       }
+
+      // Small score popup effect
+      spawnScorePopup.call(this, player.x, player.y - 40);
     }
 
     if (rightEdge < -200) {
@@ -354,17 +346,42 @@ function update() {
   }
 }
 
+// ====== SCORE POPUP FEATURE ======
+function spawnScorePopup(x, y) {
+  const popup = this.add.text(
+    x,
+    y,
+    '+1',
+    {
+      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: Math.round(GAME_HEIGHT * 0.03) + 'px',
+      color: '#00ff7f',
+      stroke: '#000000',
+      strokeThickness: 4
+    }
+  ).setOrigin(0.5);
+  popup.setDepth(1002);
+
+  this.tweens.add({
+    targets: popup,
+    y: y - 40,
+    alpha: 0,
+    duration: 600,
+    ease: 'Sine.easeOut',
+    onComplete: () => popup.destroy()
+  });
+}
+
 // ====== FLAP ======
 function flap() {
   if (gameState !== STATE_PLAYING) return;
 
   player.setVelocityY(FLAP_VELOCITY);
-  player.angle = -25; // tilt up on flap
+  player.angle = -25;
 
   if (flapSound && flapSound.isPlaying) flapSound.stop();
   if (flapSound) flapSound.play();
 
-  // Mobile haptic feedback
   if (navigator.vibrate) {
     navigator.vibrate(30);
   }
@@ -381,7 +398,6 @@ function addPipePair() {
   const { gapRatio, pipeSpeed } = getDifficulty();
   const gap = Math.round(h * gapRatio);
 
-  // Center of the gap
   const minCenter = gap / 2 + 50;
   const maxCenter = h - baseHeight - gap / 2 - 50;
   const centerY = Phaser.Math.Between(
@@ -389,43 +405,42 @@ function addPipePair() {
     Math.max(minCenter + 1, maxCenter)
   );
 
-  // Desired pixel width of the pipes
   const pipePixelWidth = w * PIPE_WIDTH_RATIO;
 
   // ---- TOP PIPE ----
-  // height from top of screen down to top of gap
   const topHeight = centerY - gap / 2;
 
   const topPipe = pipes.create(
     w + pipePixelWidth / 2 + 30,
-    topHeight, // bottom of the top pipe
+    topHeight,
     'pipe'
   );
-  topPipe.setOrigin(0.5, 1); // bottom anchored
-  topPipe.setFlipY(true);    // open end faces downward
-  topPipe.displayWidth = pipePixelWidth;
-  topPipe.displayHeight = topHeight; // stretches so top is at y≈0
+  topPipe.setOrigin(0.5, 1);
+  topPipe.setFlipY(true);
+  topPipe.displayWidth  = pipePixelWidth;
+  topPipe.displayHeight = topHeight;
   topPipe.body.allowGravity = false;
   topPipe.setImmovable(true);
   topPipe.setVelocityX(pipeSpeed);
   topPipe.setDepth(5);
+  topPipe.body.setSize(topPipe.displayWidth, topPipe.displayHeight, true);
 
   // ---- BOTTOM PIPE ----
-  // height from top of gap down to ground (above base)
   const bottomHeight = (h - baseHeight) - (centerY + gap / 2);
 
   const bottomPipe = pipes.create(
     w + pipePixelWidth / 2 + 30,
-    centerY + gap / 2, // top of bottom pipe
+    centerY + gap / 2,
     'pipe'
   );
-  bottomPipe.setOrigin(0.5, 0); // top anchored
-  bottomPipe.displayWidth = pipePixelWidth;
-  bottomPipe.displayHeight = bottomHeight; // stretches to ground
+  bottomPipe.setOrigin(0.5, 0);
+  bottomPipe.displayWidth  = pipePixelWidth;
+  bottomPipe.displayHeight = bottomHeight;
   bottomPipe.body.allowGravity = false;
   bottomPipe.setImmovable(true);
   bottomPipe.setVelocityX(pipeSpeed);
   bottomPipe.setDepth(5);
+  bottomPipe.body.setSize(bottomPipe.displayWidth, bottomPipe.displayHeight, true);
 
   pipePairs.push({ top: topPipe, bottom: bottomPipe, passed: false });
 }
@@ -441,7 +456,6 @@ function playerHit() {
   player.setVelocity(0, 0);
   player.angle = 90;
 
-  // Stop pipes
   pipes.getChildren().forEach(p => {
     if (p && p.body) {
       p.setVelocityX(0);
@@ -457,15 +471,12 @@ function playerHit() {
   if (flapSound && flapSound.isPlaying) flapSound.stop();
   if (deathSound) deathSound.play();
 
-  // Haptic buzz on death
   if (navigator.vibrate) {
     navigator.vibrate([80, 60, 80]);
   }
 
-  // Camera shake
   this.cameras.main.shake(150, 0.01);
 
-  // Save high score
   try {
     const stored = parseInt(localStorage.getItem('flappyFriendHighScore') || '0', 10);
     if (isNaN(stored) || score > stored) {
@@ -476,16 +487,15 @@ function playerHit() {
     // ignore if storage not available
   }
 
-  // Restart text with pulsing animation
   restartText = this.add.text(
     GAME_WIDTH / 2,
-    GAME_HEIGHT / 2,
+    GAME_HEIGHT * 0.5,
     'TAP TO RESTART',
     {
-      fontFamily: "'Press Start 2P'",
-      fontSize: Math.round(GAME_HEIGHT * 0.05) + 'px',
-      fill: '#fffb',
-      stroke: '#000',
+      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: Math.round(GAME_HEIGHT * 0.045) + 'px',
+      color: '#ffffff',
+      stroke: '#000000',
       strokeThickness: 6
     }
   ).setOrigin(0.5);
