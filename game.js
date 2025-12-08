@@ -1,14 +1,14 @@
 // ---- DEVICE DETECTION ----
 const IS_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-// Fixed virtual game size (same logical world on all devices)
-const GAME_WIDTH  = 540;
-const GAME_HEIGHT = 960;
+// initial canvas size = visible browser size
+const INITIAL_WIDTH  = window.innerWidth  || 540;
+const INITIAL_HEIGHT = window.innerHeight || 960;
 
 const config = {
   type: Phaser.AUTO,
-  width: GAME_WIDTH,
-  height: GAME_HEIGHT,
+  width: INITIAL_WIDTH,
+  height: INITIAL_HEIGHT,
   parent: 'game-container',
   physics: {
     default: 'arcade',
@@ -34,13 +34,13 @@ let flapSound, deathSound;
 let bgImage, base, ceiling;
 let readyText, restartText;
 
-// Layout & physics ratios (based on virtual size)
+// Layout & physics ratios (based on current height)
 const BASE_HEIGHT_RATIO     = IS_MOBILE ? 0.14 : 0.12;
 const PLAYER_SCALE_RATIO    = 0.09;
 const PIPE_WIDTH_RATIO      = 0.10;
-const PIPE_GAP_RATIO_BASE   = IS_MOBILE ? 0.42 : 0.35;  // slightly bigger gap on mobile
-const FLAP_VELOCITY         = IS_MOBILE ? -420 : -350;  // stronger flap on mobile
-const PIPE_SPEED_BASE       = IS_MOBILE ? -180 : -200;  // a bit slower on mobile
+const PIPE_GAP_RATIO_BASE   = IS_MOBILE ? 0.42 : 0.35;
+const FLAP_VELOCITY         = IS_MOBILE ? -420 : -350;
+const PIPE_SPEED_BASE       = IS_MOBILE ? -180 : -200;
 
 // Pipe spacing (horizontal) randomness in ms
 const PIPE_DELAY_MIN_BASE = 1300;
@@ -112,6 +112,10 @@ function create() {
     pipeTimer = null;
   }
 
+  // pull current canvas size (this changes on resize)
+  const W = this.scale.width;
+  const H = this.scale.height;
+
   // Load / init high score
   try {
     highScore = parseInt(localStorage.getItem('flappyFriendHighScore') || '0', 10);
@@ -124,21 +128,17 @@ function create() {
   deathSound = this.sound.add('death');
 
   // === STATIC BACKGROUND ===
-  bgImage = this.add.image(
-    GAME_WIDTH / 2,
-    GAME_HEIGHT / 2,
-    'background'
-  );
-  bgImage.displayWidth  = GAME_WIDTH;
-  bgImage.displayHeight = GAME_HEIGHT;
+  bgImage = this.add.image(W / 2, H / 2, 'background');
+  bgImage.displayWidth  = W;
+  bgImage.displayHeight = H;
   bgImage.setDepth(0);
 
   // Ground
-  const baseHeight = Math.round(GAME_HEIGHT * BASE_HEIGHT_RATIO);
+  const baseHeight = Math.round(H * BASE_HEIGHT_RATIO);
   base = this.add.tileSprite(
-    GAME_WIDTH / 2,
-    GAME_HEIGHT - baseHeight / 2,
-    GAME_WIDTH,
+    W / 2,
+    H - baseHeight / 2,
+    W,
     baseHeight,
     'base'
   );
@@ -149,9 +149,9 @@ function create() {
   // Ceiling (invisible)
   const ceilingHeight = 10;
   ceiling = this.add.rectangle(
-    GAME_WIDTH / 2,
+    W / 2,
     ceilingHeight / 2,
-    GAME_WIDTH,
+    W,
     ceilingHeight,
     0x000000,
     0
@@ -162,29 +162,27 @@ function create() {
   // Pipes group
   pipes = this.physics.add.group();
 
-  // Player with custom image
+  // Player
   player = this.physics.add.sprite(
-    GAME_WIDTH / 4,
-    GAME_HEIGHT / 2,
+    W / 4,
+    H / 2,
     'player'
   );
 
-  const pScale = (GAME_HEIGHT * PLAYER_SCALE_RATIO) / player.height;
+  const pScale = (H * PLAYER_SCALE_RATIO) / player.height;
   player.setScale(pScale);
   player.setOrigin(0.5, 0.5);
   player.setVisible(true);
-  player.body.setAllowGravity(false); // no gravity until game starts
+  player.body.setAllowGravity(false); // until start
   player.setCollideWorldBounds(false);
   player.setDepth(10);
 
-  // INCREASED COLLISION BOX (20% larger than sprite)
   const displayW = player.displayWidth;
   const displayH = player.displayHeight;
   player.body.setSize(displayW * 1.2, displayH * 1.2, true);
-
   player.angle = 0;
 
-  // Input handler for READY / PLAYING / OVER
+  // Input handler
   const handleInput = () => {
     if (gameState === STATE_READY) {
       startGame.call(this);
@@ -204,16 +202,16 @@ function create() {
   this.physics.add.collider(player, base, playerHit, null, this);
   this.physics.add.collider(player, ceiling, playerHit, null, this);
 
-  // === UI TEXT (aligned & sized for phones) ===
+  // === UI TEXT (aligned for phones) ===
 
   // Score in top-centre
   scoreText = this.add.text(
-    GAME_WIDTH / 2,
-    GAME_HEIGHT * 0.06,
+    W / 2,
+    H * 0.06,
     '0',
     {
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      fontSize: Math.round(GAME_HEIGHT * 0.05) + 'px',
+      fontSize: Math.round(H * 0.05) + 'px',
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 6
@@ -221,29 +219,29 @@ function create() {
   ).setOrigin(0.5, 0.5);
   scoreText.setDepth(1000);
 
-  // High score in top-left, smaller
+  // High score in top-left
   highScoreText = this.add.text(
-    GAME_WIDTH * 0.03,
-    GAME_HEIGHT * 0.02,
+    W * 0.03,
+    H * 0.02,
     `BEST: ${highScore}`,
     {
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      fontSize: Math.round(GAME_HEIGHT * 0.03) + 'px',
+      fontSize: Math.round(H * 0.03) + 'px',
       color: '#ffeb3b',
       stroke: '#000000',
       strokeThickness: 5
     }
-  ).setOrigin(0, 0); // left-top
+  ).setOrigin(0, 0);
   highScoreText.setDepth(1000);
 
-  // Ready text in middle
+  // Ready text
   readyText = this.add.text(
-    GAME_WIDTH / 2,
-    GAME_HEIGHT * 0.5,
+    W / 2,
+    H * 0.5,
     'TAP TO START',
     {
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      fontSize: Math.round(GAME_HEIGHT * 0.045) + 'px',
+      fontSize: Math.round(H * 0.045) + 'px',
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 6
@@ -299,11 +297,13 @@ function scheduleNextPipe() {
 
 // ====== UPDATE LOOP ======
 function update() {
+  const H = this.scale.height;
+
   if (gameState === STATE_READY) {
     const bobAmplitude = 10;
     const bobSpeed = 0.003;
     const t = this.time.now;
-    player.y = GAME_HEIGHT / 2 + Math.sin(t * bobSpeed) * bobAmplitude;
+    player.y = H / 2 + Math.sin(t * bobSpeed) * bobAmplitude;
     return;
   }
 
@@ -311,7 +311,7 @@ function update() {
 
   // PLAYING
 
-  // Background is static. Only ground moves:
+  // Static background, moving ground
   base.tilePositionX += 2;
 
   // Tilt logic
@@ -334,7 +334,6 @@ function update() {
         highScoreText.setText(`BEST: ${highScore}`);
       }
 
-      // Small score popup effect
       spawnScorePopup.call(this, player.x, player.y - 40);
     }
 
@@ -348,13 +347,15 @@ function update() {
 
 // ====== SCORE POPUP FEATURE ======
 function spawnScorePopup(x, y) {
-  const popup = this.add.text(
+  const H = game.scale.height;
+
+  const popup = game.scene.scenes[0].add.text(
     x,
     y,
     '+1',
     {
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      fontSize: Math.round(GAME_HEIGHT * 0.03) + 'px',
+      fontSize: Math.round(H * 0.03) + 'px',
       color: '#00ff7f',
       stroke: '#000000',
       strokeThickness: 4
@@ -362,7 +363,7 @@ function spawnScorePopup(x, y) {
   ).setOrigin(0.5);
   popup.setDepth(1002);
 
-  this.tweens.add({
+  game.scene.scenes[0].tweens.add({
     targets: popup,
     y: y - 40,
     alpha: 0,
@@ -391,27 +392,26 @@ function flap() {
 function addPipePair() {
   if (gameState !== STATE_PLAYING) return;
 
-  const w = GAME_WIDTH;
-  const h = GAME_HEIGHT;
-  const baseHeight = Math.round(h * BASE_HEIGHT_RATIO);
+  const W = game.scale.width;
+  const H = game.scale.height;
+  const baseHeight = Math.round(H * BASE_HEIGHT_RATIO);
 
   const { gapRatio, pipeSpeed } = getDifficulty();
-  const gap = Math.round(h * gapRatio);
+  const gap = Math.round(H * gapRatio);
 
   const minCenter = gap / 2 + 50;
-  const maxCenter = h - baseHeight - gap / 2 - 50;
+  const maxCenter = H - baseHeight - gap / 2 - 50;
   const centerY = Phaser.Math.Between(
     minCenter,
     Math.max(minCenter + 1, maxCenter)
   );
 
-  const pipePixelWidth = w * PIPE_WIDTH_RATIO;
+  const pipePixelWidth = W * PIPE_WIDTH_RATIO;
 
-  // ---- TOP PIPE ----
+  // TOP PIPE
   const topHeight = centerY - gap / 2;
-
   const topPipe = pipes.create(
-    w + pipePixelWidth / 2 + 30,
+    W + pipePixelWidth / 2 + 30,
     topHeight,
     'pipe'
   );
@@ -425,11 +425,10 @@ function addPipePair() {
   topPipe.setDepth(5);
   topPipe.body.setSize(topPipe.displayWidth, topPipe.displayHeight, true);
 
-  // ---- BOTTOM PIPE ----
-  const bottomHeight = (h - baseHeight) - (centerY + gap / 2);
-
+  // BOTTOM PIPE
+  const bottomHeight = (H - baseHeight) - (centerY + gap / 2);
   const bottomPipe = pipes.create(
-    w + pipePixelWidth / 2 + 30,
+    W + pipePixelWidth / 2 + 30,
     centerY + gap / 2,
     'pipe'
   );
@@ -475,7 +474,7 @@ function playerHit() {
     navigator.vibrate([80, 60, 80]);
   }
 
-  this.cameras.main.shake(150, 0.01);
+  game.scene.scenes[0].cameras.main.shake(150, 0.01);
 
   try {
     const stored = parseInt(localStorage.getItem('flappyFriendHighScore') || '0', 10);
@@ -483,17 +482,18 @@ function playerHit() {
       localStorage.setItem('flappyFriendHighScore', score.toString());
       highScoreText.setText(`BEST: ${score}`);
     }
-  } catch (e) {
-    // ignore if storage not available
-  }
+  } catch (e) {}
 
-  restartText = this.add.text(
-    GAME_WIDTH / 2,
-    GAME_HEIGHT * 0.5,
+  const W = game.scale.width;
+  const H = game.scale.height;
+
+  restartText = game.scene.scenes[0].add.text(
+    W / 2,
+    H * 0.5,
     'TAP TO RESTART',
     {
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      fontSize: Math.round(GAME_HEIGHT * 0.045) + 'px',
+      fontSize: Math.round(H * 0.045) + 'px',
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 6
@@ -501,7 +501,7 @@ function playerHit() {
   ).setOrigin(0.5);
   restartText.setDepth(1001);
 
-  this.tweens.add({
+  game.scene.scenes[0].tweens.add({
     targets: restartText,
     scaleX: 1.1,
     scaleY: 1.1,
@@ -523,7 +523,20 @@ function restartScene() {
   if (pipes) pipes.clear(true, true);
   pipePairs = [];
 
-  this.scene.restart();
+  game.scene.scenes[0].scene.restart();
 }
 
-// Phaser Scale.FIT handles resize; no manual resize listener needed.
+// ====== HANDLE RESIZE (orientation, browser UI changes) ======
+window.addEventListener('resize', () => {
+  const newW = window.innerWidth || 540;
+  const newH = window.innerHeight || 960;
+
+  game.scale.resize(newW, newH);
+
+  // Restart active scenes so layout re-calculates with new width/height
+  game.scene.scenes.forEach(s => {
+    if (s && s.scene && s.scene.isActive()) {
+      s.scene.restart();
+    }
+  });
+});
