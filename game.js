@@ -237,7 +237,7 @@ function create() {
         GAME_HEIGHT * 0.5,
         'TAP TO START',
         {
-            fontFamily: FONT_FAMILY_READABLE,
+            fontFamily: FONT_FAMILY,
             fontSize: '24px',
             color: '#FFFFFF',
             stroke: '#000000',
