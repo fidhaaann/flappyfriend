@@ -526,10 +526,10 @@ function playerHit(playerObj, obstacle) {
         GAME_HEIGHT * 0.65,
         'TAP TO PLAY AGAIN',
         {
-            fontFamily: FONT_FAMILY_READABLE,
+            fontFamily: FONT_FAMILY,
             fontSize: '20px',
-            color: '#4DFFAE',
-            stroke: '#000000',
+            color: '#ffffffff',
+            stroke: '#ffd900ff',
             strokeThickness: 4,
             align: 'center'
         }
