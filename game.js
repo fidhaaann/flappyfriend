@@ -112,9 +112,6 @@ function preload() {
   this.load.image('base', 'assets/base.png');
   this.load.image('gameover', 'assets/gameover.png');
   
-  // Add this line for gameover image (uncomment when you have the file)
-
-  
   // Add coin image for new feature
   this.load.image('coin', 'assets/coin.png');
   
@@ -123,8 +120,7 @@ function preload() {
 
   this.load.audio('flap', 'assets/flap.mp3');
   this.load.audio('death', 'assets/death.mp3');
-  this.load.audio('score', 'assets/score.mp3');
-  this.load.audio('coin', 'assets/coin.mp3');
+  
   
   // Add background music (optional)
   // this.load.audio('bgmusic', 'assets/background-music.mp3');
@@ -834,8 +830,7 @@ function playerHit(playerObj, obstacle) {
     // ignore if storage not available
   }
 
-  // Add gameover image (uncomment when you have the file)
-  /*
+  // Add gameover image
   gameOverImage = this.add.image(
     GAME_WIDTH / 2,
     GAME_HEIGHT * 0.4,
@@ -856,7 +851,6 @@ function playerHit(playerObj, obstacle) {
     duration: 800,
     ease: 'Back.easeOut'
   });
-  */
 
   // Final score display
   const finalScoreText = this.add.text(

@@ -151,4 +151,35 @@
   </div>
   
   <!-- Game container -->
-  <div id="game-container
+  <div id="game-container"></div>
+  
+  <!-- Game info -->
+  <div class="game-info">
+    Tap or press SPACE to flap | Collect coins for power-ups!
+  </div>
+  
+  <!-- Mute button (optional) -->
+  <div class="mute-btn" id="mute-btn" style="display: none;">
+    🔇
+  </div>
+  
+  <script>
+    // Hide loading screen when game starts
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        document.getElementById('loading').classList.add('hidden');
+      }, 1000);
+    });
+    
+    // Mute button functionality (optional)
+    const muteBtn = document.getElementById('mute-btn');
+    muteBtn.addEventListener('click', function() {
+      // Add sound toggle functionality here if needed
+      this.textContent = this.textContent === '🔇' ? '🔊' : '🔇';
+    });
+  </script>
+  
+  <!-- Your game.js file -->
+  <script src="game.js"></script>
+</body>
+</html>
